@@ -426,7 +426,6 @@ class _Vxsnd(service.Vxfld):
                                p=dpkt.ip.IP_PROTO_UDP,
                                data=udp_packet)
         ip_packet.len = len(ip_packet)
-        ip_packet_str = str(ip_packet)
         with self.__fsocketpool.item() as fsock:
             for dstip in fwd_list:
                 self._logger.debug('Sending vxlan pkt from %s to %s, vni %s',
@@ -438,7 +437,13 @@ class _Vxsnd(service.Vxfld):
                 else:
                     dst = socket.inet_aton(dstip)
                     self.__aton_cache[dstip] = dst
-                ip_packet_str = ip_packet_str[:16] + dst + ip_packet_str[20:]
+
+                # This change ensures that the UDP checksum is always correct
+                # useful for environments where TX offload isn't possible
+                # TODO (markmcclain): reoptimize this later
+                ip_packet.data.sum = 0
+                ip_packet.dst = dst
+                ip_packet_str = str(ip_packet)
                 try:
                     fsock.sendto(ip_packet_str, (dstip, 0))
                 except Exception as ex:  # pylint: disable=broad-except
